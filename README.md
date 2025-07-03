@@ -6,6 +6,8 @@
 
 A Laravel-inspired PHP SDK for building Claude Code hook responses with a clean, fluent API. This SDK makes it easy to create structured JSON responses for Claude Code hooks using an expressive, chainable interface.
 
+Claude Code hooks are user-defined shell commands that execute at specific points in Claude Code's lifecycle, providing deterministic control over its behavior. For more details, see the [Claude Code Hooks documentation](https://docs.anthropic.com/en/docs/claude-code/hooks).
+
 ## Installation
 
 You can install the package via composer:
@@ -16,239 +18,195 @@ composer require beyondcode/claude-hooks-sdk
 
 ## Usage
 
-### Basic Examples
+### Creating a Claude Hook
 
-#### PreToolUse Hooks
+Here's how to create a PHP script that Claude Code can use as a hook:
 
-Block a tool call:
+#### Step 1: Create your PHP hook script
+
+Create a new PHP file (e.g., `validate-code.php`) using the SDK:
+
 ```php
-use ClaudeHooks\Hook;
+<?php
 
-Hook::preToolUse()
-    ->block('Command uses deprecated grep instead of ripgrep')
-    ->send();
+require 'vendor/autoload.php';
+
+use BeyondCode\ClaudeHooks\ClaudeHook;
+
+// Read the hook data from stdin. 
+// This will automatically return the correct Hook instance (for example PreToolUse)
+$hook = ClaudeHook::create();
+
+// Example: Validate bash commands
+if ($hook->toolName() === 'Bash') {
+    $command = $hook->toolInput('command', '');
+    
+    // Check for potentially dangerous commands
+    if (str_contains($command, 'rm -rf')) {
+        // Block the tool call with feedback
+        $hook->response()->block('Dangerous command detected. Use caution with rm -rf commands.');
+    }
+}
+
+// Allow other tool calls to proceed
+$hook->success();
 ```
 
-Approve a tool call:
+#### Step 2: Register your hook in Claude Code
+
+1. Run the `/hooks` command in Claude Code
+2. Select the `PreToolUse` hook event (runs before tool execution)
+3. Add a matcher (e.g., `Bash` to match shell commands)
+4. Add your hook command: `php /path/to/your/validate-code.php`
+5. Save to user or project settings
+
+Your hook is now active and will validate commands before Claude Code executes them!
+
+### Hook Types and Methods
+
+The SDK automatically creates the appropriate hook type based on the input:
+
 ```php
-Hook::preToolUse()
-    ->approve('Command validated successfully')
-    ->send();
+use BeyondCode\ClaudeHooks\ClaudeHook;
+use BeyondCode\ClaudeHooks\Hooks\{PreToolUse, PostToolUse, Notification, Stop, SubagentStop};
+
+$hook = ClaudeHook::create();
+
+if ($hook instanceof PreToolUse) {
+    $toolName = $hook->toolName();           // e.g., "Bash", "Write", "Edit"
+    $toolInput = $hook->toolInput();         // Full input array
+    $filePath = $hook->toolInput('file_path'); // Specific input value
+}
+
+if ($hook instanceof PostToolUse) {
+    $toolResponse = $hook->toolResponse();   // Full response array
+    $success = $hook->toolResponse('success', true); // With default value
+}
+
+if ($hook instanceof Notification) {
+    $message = $hook->message();
+    $title = $hook->title();
+}
+
+if ($hook instanceof Stop || $hook instanceof SubagentStop) {
+    $isActive = $hook->stopHookActive();
+}
 ```
 
-#### PostToolUse Hooks
+### Response Methods
 
-Provide feedback after tool execution:
+All hooks provide a fluent response API:
+
 ```php
-Hook::postToolUse()
-    ->block('Code formatting violations detected')
-    ->send();
+// Continue processing (default behavior)
+$hook->response()->continue();
+
+// Stop Claude from continuing with a reason
+$hook->response()->stop('Reason for stopping');
+
+// For PreToolUse: approve or block tool calls
+$hook->response()->approve('Optional approval message')->continue();
+$hook->response()->block('Required reason for blocking')->continue();
+
+// Suppress output from transcript mode
+$hook->response()->suppressOutput()->continue();
 ```
 
-#### Stop/SubagentStop Hooks
-
-Prevent Claude from stopping:
-```php
-Hook::stop()
-    ->block('Tests are still running, please wait')
-    ->send();
-```
-
-### Advanced Examples
-
-#### Suppress Output
-
-Hide stdout from transcript mode:
-```php
-Hook::preToolUse()
-    ->approve('Silently approved')
-    ->suppressOutput()
-    ->send();
-```
-
-#### Stop Processing
-
-Stop Claude from continuing with a reason:
-```php
-Hook::make()
-    ->stopProcessing('System maintenance in progress')
-    ->send();
-```
-
-#### Custom Fields
-
-Add custom fields to the response:
-```php
-Hook::postToolUse()
-    ->with('customField', 'value')
-    ->merge(['foo' => 'bar', 'baz' => 123])
-    ->send();
-```
-
-#### Error Responses
-
-Send a blocking error (exit code 2):
-```php
-Hook::blockWithError('Invalid file path detected');
-```
-
-Send a non-blocking error:
-```php
-Hook::make()->fail('Warning: deprecated function used', 1);
-```
-
-### Example Hook Scripts
+### Example Hooks
 
 #### Code Formatter Hook
 
+Automatically format PHP files after edits:
+
 ```php
-#!/usr/bin/env php
 <?php
-require __DIR__ . '/vendor/autoload.php';
 
-use ClaudeHooks\Hook;
+require 'vendor/autoload.php';
 
-$input = json_decode(file_get_contents('php://stdin'), true);
-$toolInput = $input['tool_input'] ?? [];
-$filePath = $toolInput['file_path'] ?? '';
+use BeyondCode\ClaudeHooks\ClaudeHook;
+use BeyondCode\ClaudeHooks\Hooks\PostToolUse;
 
-if (!$filePath || !file_exists($filePath)) {
-    exit(0);
-}
+$hook = ClaudeHook::create();
 
-$extension = pathinfo($filePath, PATHINFO_EXTENSION);
+$filePath = $hook->toolInput('file_path', '');
 
-// Run appropriate formatter
-$formatters = [
-    'php' => 'php-cs-fixer fix %s',
-    'js' => 'prettier --write %s',
-    'ts' => 'prettier --write %s',
-    'py' => 'black %s',
-];
-
-if (isset($formatters[$extension])) {
-    $cmd = sprintf($formatters[$extension], escapeshellarg($filePath));
-    exec($cmd, $output, $exitCode);
+if (str_ends_with($filePath, '.php')) {
+    exec("php-cs-fixer fix $filePath", $output, $exitCode);
     
     if ($exitCode !== 0) {
-        Hook::postToolUse()
-            ->block("Formatting failed: " . implode("\n", $output))
-            ->send();
+        $hook->response()
+            ->suppressOutput()
+            ->merge(['error' => 'Formatting failed'])
+            ->continue();
     }
 }
-
-Hook::success();
 ```
 
-#### Command Validator Hook
+#### Security Validator Hook
+
+Prevent modifications to sensitive files:
 
 ```php
 #!/usr/bin/env php
 <?php
-require __DIR__ . '/vendor/autoload.php';
 
-use ClaudeHooks\Hook;
+require 'vendor/autoload.php';
 
-$input = json_decode(file_get_contents('php://stdin'), true);
+use BeyondCode\ClaudeHooks\ClaudeHook;
+use BeyondCode\ClaudeHooks\Hooks\PreToolUse;
 
-if ($input['tool_name'] !== 'Bash') {
-    exit(0);
-}
+$hook = ClaudeHook::fromStdin(file_get_contents('php://stdin'));
 
-$command = $input['tool_input']['command'] ?? '';
-
-// Validate dangerous commands
-$dangerous = ['rm -rf /', 'dd if=', ':(){:|:&};:'];
-foreach ($dangerous as $pattern) {
-    if (strpos($command, $pattern) !== false) {
-        Hook::preToolUse()
-            ->block("Dangerous command detected: $pattern")
-            ->send();
+if ($hook instanceof PreToolUse) {
+    // Check file-modifying tools
+    if (in_array($hook->toolName(), ['Write', 'Edit', 'MultiEdit'])) {
+        $filePath = $hook->toolInput('file_path', '');
+        
+        $sensitivePatterns = [
+            '.env',
+            'config/database.php',
+            'storage/oauth-private.key',
+        ];
+        
+        foreach ($sensitivePatterns as $pattern) {
+            if (str_contains($filePath, $pattern)) {
+                $hook->response()->block("Cannot modify sensitive file: $filePath");
+            }
+        }
     }
 }
 
-// Check for deprecated commands
-if (preg_match('/\bgrep\b(?!.*\|)/', $command)) {
-    Hook::preToolUse()
-        ->block("Use 'rg' (ripgrep) instead of 'grep' for better performance")
-        ->send();
-}
-
-// Approve if all checks pass
-Hook::preToolUse()
-    ->approve()
-    ->send();
+// Allow all other operations
+$hook->response()->continue();
 ```
 
-#### Stop Hook with Tests
+#### Notification Handler Hook
+
+Custom notification handling:
 
 ```php
-#!/usr/bin/env php
 <?php
-require __DIR__ . '/vendor/autoload.php';
 
-use ClaudeHooks\Hook;
+require 'vendor/autoload.php';
 
-// Check if tests are running
-exec('pgrep -f "phpunit|pest"', $output, $exitCode);
+use BeyondCode\ClaudeHooks\ClaudeHook;
+use BeyondCode\ClaudeHooks\Hooks\Notification;
 
-if ($exitCode === 0) {
-    Hook::stop()
-        ->block('Tests are still running. Please wait for completion.')
-        ->send();
-}
+$hook = ClaudeHook::create();
 
-// Check for uncommitted changes
-exec('git diff --quiet', $output, $exitCode);
+// Send to custom notification system
+$notificationData = [
+    'title' => $hook->title(),
+    'message' => $hook->message(),
+    'session' => $hook->sessionId(),
+    'timestamp' => time()
+];
+    
+// Send notification to Slack, Discord, etc.
 
-if ($exitCode !== 0) {
-    Hook::stop()
-        ->block('You have uncommitted changes. Please commit or stash them first.')
-        ->send();
-}
-
-// Allow stopping
-Hook::success();
+$hook->success();
 ```
 
-### API Reference
-
-#### Static Factory Methods
-
-- `Hook::preToolUse()` - Create a PreToolUse hook response
-- `Hook::postToolUse()` - Create a PostToolUse hook response  
-- `Hook::stop()` - Create a Stop hook response
-- `Hook::subagentStop()` - Create a SubagentStop hook response
-- `Hook::make()` - Create a generic hook response
-
-#### Decision Methods
-
-- `approve(string $reason = '')` - Approve tool execution (PreToolUse only)
-- `block(string $reason)` - Block tool execution or prevent stopping
-
-#### Control Flow Methods
-
-- `continueProcessing()` - Allow Claude to continue (default)
-- `stopProcessing(string $stopReason)` - Stop Claude with a reason
-- `suppressOutput(bool $suppress = true)` - Hide output from transcript
-
-#### Data Methods
-
-- `with(string $key, $value)` - Add a custom field
-- `merge(array $fields)` - Merge multiple fields
-- `toArray()` - Get output as array
-- `toJson(int $options)` - Get output as JSON string
-
-#### Output Methods
-
-- `send(int $exitCode = 0)` - Send JSON response and exit
-- `error(string $message)` - Send blocking error (exit 2)
-- `fail(string $message, int $exitCode)` - Send non-blocking error
-
-#### Static Helpers
-
-- `Hook::blockWithError(string $message)` - Quick blocking error
-- `Hook::success(string $message = '')` - Quick success response
 
 ## Testing
 
