@@ -1,0 +1,48 @@
+{
+    "name": "beyondcode/claude-hooks-sdk",
+    "description": "A Laravel-inspired PHP SDK for building Claude Code hook responses with a fluent API.",
+    "keywords": [
+        "beyondcode",
+        "claude-hooks-sdk"
+    ],
+    "homepage": "https://github.com/beyondcode/claude-hooks-sdk",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Marcel Pociot",
+            "email": "marcel@beyondco.de",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.1"
+    },
+    "require-dev": {
+        "pestphp/pest": "^3.0",
+        "laravel/pint": "^1.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "BeyondCode\\ClaudeHooks\\": "src"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "BeyondCode\\ClaudeHooks\\Tests\\": "tests"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/pest",
+        "test-coverage": "herd coverage vendor/bin/pest --coverage",
+        "format": "vendor/bin/pint"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "phpstan/extension-installer": true
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
