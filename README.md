@@ -225,16 +225,31 @@ use BeyondCode\ClaudeHooks\Hooks\UserPromptSubmit;
 
 $hook = ClaudeHook::create();
 
-// Check for sensitive patterns
-if (str_contains($hook->prompt(), 'password') || str_contains($hook->prompt(), 'secret')) {
-    // Block the prompt
-    $hook->response()->block('Security policy violation: Please rephrase without sensitive information.');
+// Ask Claude Code - what is my secret-code?
+// It should respond with ABC123 thanks to our injected prompt
+
+if ($hook instanceof UserPromptSubmit) {
+    $prompt = $hook->prompt();
+    $lowerPrompt = strtolower($prompt);
+    
+    // Add context via your script and output the "fancy" way
+    if (str_contains($lowerPrompt, 'secret-code')) {
+        $contextReminder = "\n\n🔍 Your secret code is 'ABC123'";
+        $modifiedPrompt = $prompt . $contextReminder;
+        
+        $hook->response()->merge(['prompt' => $modifiedPrompt])->continue();
+        return;
+    }
+
+    // Add context via your script and output directly to stdout
+    if (str_contains($lowerPrompt, 'laravel')) {
+        echo PHP_EOL . PHP_EOL . 'Remember, this is a Laravel project, so use laravel-boost mcp server and related tools.';
+        return;
+    }
 }
 
-// Add context via stdout
-echo "Current time: " . date('Y-m-d H:i:s') . "\n";
-echo "Project status: Active development\n";
-$hook->success();
+// For all other hook types, allow them to proceed
+$hook->response()->continue();
 ```
 
 
