@@ -68,7 +68,7 @@ The SDK automatically creates the appropriate hook type based on the input:
 
 ```php
 use BeyondCode\ClaudeHooks\ClaudeHook;
-use BeyondCode\ClaudeHooks\Hooks\{PreToolUse, PostToolUse, Notification, Stop, SubagentStop};
+use BeyondCode\ClaudeHooks\Hooks\{PreToolUse, PostToolUse, Notification, UserPromptSubmit, Stop, SubagentStop};
 
 $hook = ClaudeHook::create();
 
@@ -86,6 +86,10 @@ if ($hook instanceof PostToolUse) {
 if ($hook instanceof Notification) {
     $message = $hook->message();
     $title = $hook->title();
+}
+
+if ($hook instanceof UserPromptSubmit) {
+    $prompt = $hook->prompt();
 }
 
 if ($hook instanceof Stop || $hook instanceof SubagentStop) {
@@ -205,6 +209,47 @@ $notificationData = [
 // Send notification to Slack, Discord, etc.
 
 $hook->success();
+```
+
+#### User Prompt Submit Hook
+
+Validate and add context to user prompts:
+
+```php
+<?php
+
+require 'vendor/autoload.php';
+
+use BeyondCode\ClaudeHooks\ClaudeHook;
+use BeyondCode\ClaudeHooks\Hooks\UserPromptSubmit;
+
+$hook = ClaudeHook::create();
+
+// Ask Claude Code - what is my secret-code?
+// It should respond with ABC123 thanks to our injected prompt
+
+if ($hook instanceof UserPromptSubmit) {
+    $prompt = $hook->prompt();
+    $lowerPrompt = strtolower($prompt);
+    
+    // Add context via your script and output the "fancy" way
+    if (str_contains($lowerPrompt, 'secret-code')) {
+        $contextReminder = "\n\n🔍 Your secret code is 'ABC123'";
+        $modifiedPrompt = $prompt . $contextReminder;
+        
+        $hook->response()->merge(['prompt' => $modifiedPrompt])->continue();
+        return;
+    }
+
+    // Add context via your script and output directly to stdout
+    if (str_contains($lowerPrompt, 'laravel')) {
+        echo PHP_EOL . PHP_EOL . 'Remember, this is a Laravel project, so use laravel-boost mcp server and related tools.';
+        return;
+    }
+}
+
+// For all other hook types, allow them to proceed
+$hook->response()->continue();
 ```
 
 
