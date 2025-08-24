@@ -68,7 +68,7 @@ The SDK automatically creates the appropriate hook type based on the input:
 
 ```php
 use BeyondCode\ClaudeHooks\ClaudeHook;
-use BeyondCode\ClaudeHooks\Hooks\{PreToolUse, PostToolUse, Notification, Stop, SubagentStop};
+use BeyondCode\ClaudeHooks\Hooks\{PreToolUse, PostToolUse, Notification, UserPromptSubmit, Stop, SubagentStop};
 
 $hook = ClaudeHook::create();
 
@@ -86,6 +86,10 @@ if ($hook instanceof PostToolUse) {
 if ($hook instanceof Notification) {
     $message = $hook->message();
     $title = $hook->title();
+}
+
+if ($hook instanceof UserPromptSubmit) {
+    $prompt = $hook->prompt();
 }
 
 if ($hook instanceof Stop || $hook instanceof SubagentStop) {
@@ -204,6 +208,32 @@ $notificationData = [
     
 // Send notification to Slack, Discord, etc.
 
+$hook->success();
+```
+
+#### User Prompt Submit Hook
+
+Validate and add context to user prompts:
+
+```php
+<?php
+
+require 'vendor/autoload.php';
+
+use BeyondCode\ClaudeHooks\ClaudeHook;
+use BeyondCode\ClaudeHooks\Hooks\UserPromptSubmit;
+
+$hook = ClaudeHook::create();
+
+// Check for sensitive patterns
+if (str_contains($hook->prompt(), 'password') || str_contains($hook->prompt(), 'secret')) {
+    // Block the prompt
+    $hook->response()->block('Security policy violation: Please rephrase without sensitive information.');
+}
+
+// Add context via stdout
+echo "Current time: " . date('Y-m-d H:i:s') . "\n";
+echo "Project status: Active development\n";
 $hook->success();
 ```
 

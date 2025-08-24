@@ -6,6 +6,7 @@ use BeyondCode\ClaudeHooks\Hooks\PostToolUse;
 use BeyondCode\ClaudeHooks\Hooks\PreToolUse;
 use BeyondCode\ClaudeHooks\Hooks\Stop;
 use BeyondCode\ClaudeHooks\Hooks\SubagentStop;
+use BeyondCode\ClaudeHooks\Hooks\UserPromptSubmit;
 
 it('creates PreToolUse hook from stdin', function () {
     $stdin = json_encode([
@@ -92,6 +93,24 @@ it('creates SubagentStop hook from stdin', function () {
     expect($hook)->toBeInstanceOf(SubagentStop::class);
     expect($hook->eventName())->toBe('SubagentStop');
     expect($hook->stopHookActive())->toBe(false);
+});
+
+it('creates UserPromptSubmit hook from stdin', function () {
+    $stdin = json_encode([
+        'session_id' => 'test-session',
+        'transcript_path' => '/path/to/transcript.jsonl',
+        'cwd' => '/path/to/project',
+        'hook_event_name' => 'UserPromptSubmit',
+        'prompt' => 'Write a function to calculate factorial',
+    ]);
+
+    $hook = ClaudeHook::fromStdin($stdin);
+
+    expect($hook)->toBeInstanceOf(UserPromptSubmit::class);
+    expect($hook->eventName())->toBe('UserPromptSubmit');
+    expect($hook->prompt())->toBe('Write a function to calculate factorial');
+    expect($hook->sessionId())->toBe('test-session');
+    expect($hook->transcriptPath())->toBe('/path/to/transcript.jsonl');
 });
 
 it('throws exception for invalid JSON', function () {
