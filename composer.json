@@ -20,7 +20,7 @@
         "php": "^8.3"
     },
     "require-dev": {
-        "pestphp/pest": "^3.0",
+        "pestphp/pest": "^4.2",
         "laravel/pint": "^1.0"
     },
     "autoload": {
