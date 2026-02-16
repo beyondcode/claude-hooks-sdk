@@ -38,6 +38,19 @@ class Response
 
         return $this;
     }
+    
+    /**
+     * Block the tool call and immediately send the response
+     * Useful for replacing tool output entirely
+     * 
+     * @param string $reason The reason/content to provide instead of tool execution
+     */
+    public function blockAndSend(string $reason): never
+    {
+        $this->data['decision'] = 'block';
+        $this->data['reason'] = $reason;
+        $this->send();
+    }
 
     /**
      * Approve the tool call (PreToolUse only)
@@ -50,6 +63,20 @@ class Response
         }
 
         return $this;
+    }
+    
+    /**
+     * Approve the tool call and immediately send the response
+     * 
+     * @param string $reason Optional approval reason
+     */
+    public function approveAndSend(string $reason = ''): never
+    {
+        $this->data['decision'] = 'approve';
+        if ($reason) {
+            $this->data['reason'] = $reason;
+        }
+        $this->send();
     }
 
     /**
