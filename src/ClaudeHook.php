@@ -8,6 +8,7 @@ use BeyondCode\ClaudeHooks\Hooks\PostToolUse;
 use BeyondCode\ClaudeHooks\Hooks\PreToolUse;
 use BeyondCode\ClaudeHooks\Hooks\Stop;
 use BeyondCode\ClaudeHooks\Hooks\SubagentStop;
+use BeyondCode\ClaudeHooks\Hooks\UserPromptSubmit;
 
 class ClaudeHook
 {
@@ -15,6 +16,7 @@ class ClaudeHook
         'PreToolUse' => PreToolUse::class,
         'PostToolUse' => PostToolUse::class,
         'Notification' => Notification::class,
+        'UserPromptSubmit' => UserPromptSubmit::class,
         'Stop' => Stop::class,
         'SubagentStop' => SubagentStop::class,
     ];
